@@ -57,6 +57,23 @@ class ApiService {
     }
   }
 
+  static Future<String?> uploadImage(File imageFile) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/reports/upload'));
+      request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+      
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        var responseData = await response.stream.bytesToString();
+        var decoded = jsonDecode(responseData);
+        return decoded['foto_url'];
+      }
+    } catch (e) {
+      print('Error uploading image: $e');
+    }
+    return null;
+  }
+
   static Future<List<dynamic>> getReports() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/reports'));
@@ -99,5 +116,58 @@ class ApiService {
       print('Error en deleteReport: $e');
       return {'mensaje': 'Error al conectar para borrar. Revisa que el servidor esté prendido.'};
     }
+  }
+
+  // Admin Services
+  static Future<Map<String, dynamic>> updateReportStatus(int id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/reports/$id/status'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<List<dynamic>> getStaff() async {
+    final response = await http.get(Uri.parse('$baseUrl/users/staff'));
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> toggleStaffStatus(int id, String estado) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/users/staff/$id/status'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'estado': estado}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> getStats() async {
+    final response = await http.get(Uri.parse('$baseUrl/users/stats'));
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return {};
+  }
+
+  // Truck Services
+  static Future<List<dynamic>> getTrucks() async {
+    final response = await http.get(Uri.parse('$baseUrl/trucks'));
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return [];
+  }
+
+  static Future<List<dynamic>> getAssignments() async {
+    final response = await http.get(Uri.parse('$baseUrl/trucks/assignments'));
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> assignTruck(Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/trucks/assign'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    return jsonDecode(response.body);
   }
 }

@@ -42,7 +42,7 @@ class _OperadorDashboardState extends State<OperadorDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Panel de Operador'),
+        title: const Text('Municipio Cusco - Recolector'),
         backgroundColor: secondaryColor,
         foregroundColor: Colors.white,
         actions: [IconButton(onPressed: _logout, icon: const Icon(Icons.logout))],

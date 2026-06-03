@@ -17,7 +17,12 @@ class LandingScreen extends StatefulWidget {
 class _LandingScreenState extends State<LandingScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nombreController = TextEditingController();
+  final _apellidoController = TextEditingController();
+  final _dniController = TextEditingController();
+  
   bool _isLoading = false;
+  bool _isRegistering = false;
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
@@ -62,6 +67,98 @@ class _LandingScreenState extends State<LandingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error de conexión con el servidor')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _register() async {
+    final nombres = _nombreController.text.trim();
+    final apellidos = _apellidoController.text.trim();
+    final dni = _dniController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (nombres.isEmpty || apellidos.isEmpty || dni.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor completa todos los campos')),
+      );
+      return;
+    }
+
+    // Validar Nombres (> 3 letras)
+    if (nombres.length <= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Los nombres deben tener más de 3 letras')),
+      );
+      return;
+    }
+
+    // Validar Apellidos (> 3 letras)
+    if (apellidos.length <= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Los apellidos deben tener más de 3 letras')),
+      );
+      return;
+    }
+
+    // Validar DNI (8 dígitos)
+    if (dni.length != 8 || !RegExp(r'^\d{8}$').hasMatch(dni)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El DNI debe tener exactamente 8 dígitos')),
+      );
+      return;
+    }
+
+    // Validar Correo
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingrese un correo electrónico válido')),
+      );
+      return;
+    }
+
+    // Validar Contraseña (al menos una mayúscula)
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La contraseña debe tener al menos una letra mayúscula')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final userData = {
+        'nombres': nombres,
+        'apellidos': apellidos,
+        'dni': dni,
+        'correo': email,
+        'contrasena': password,
+        'rol_id': 1, // Ciudadano por defecto
+        'zona_id': 1, // Centro Histórico por defecto
+      };
+
+      final response = await ApiService.register(userData);
+
+      if (mounted) {
+        if (response['mensaje'] != null && response['mensaje'].toString().toLowerCase().contains('éxito')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Registro exitoso. Ahora puedes iniciar sesión.')),
+          );
+          setState(() => _isRegistering = false);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['mensaje'] ?? 'Error al registrarse')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al conectar con el servidor')),
         );
       }
     } finally {
@@ -117,7 +214,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                 const Icon(Icons.delete_outline, color: primaryColor, size: 24),
                                 const SizedBox(width: 8),
                                 const Text(
-                                  'SMARTWASTE',
+                                  'MUNI CUSCO',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
@@ -127,14 +224,21 @@ class _LandingScreenState extends State<LandingScreen> {
                               ],
                             ),
                             ElevatedButton(
-                              onPressed: () {},
+                              onPressed: () {
+                                setState(() {
+                                  _isRegistering = !_isRegistering;
+                                });
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryColor,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                              child: const Text('ACCESO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              child: Text(
+                                _isRegistering ? 'VOLVER AL LOGIN' : 'REGISTRO', 
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)
+                              ),
                             ),
                           ],
                         ),
@@ -149,14 +253,14 @@ class _LandingScreenState extends State<LandingScreen> {
                               children: [
                                 Expanded(child: _buildHeroSection(primaryColor, isLargeScreen)),
                                 const SizedBox(width: 50),
-                                SizedBox(width: 450, child: _buildLoginForm(primaryColor, secondaryColor)),
+                                SizedBox(width: 450, child: _buildAuthForm(primaryColor, secondaryColor)),
                               ],
                             )
                           : Column(
                               children: [
                                 _buildHeroSection(primaryColor, isLargeScreen),
                                 const SizedBox(height: 15),
-                                _buildLoginForm(primaryColor, secondaryColor),
+                                _buildAuthForm(primaryColor, secondaryColor),
                               ],
                             ),
                       ),
@@ -191,12 +295,12 @@ class _LandingScreenState extends State<LandingScreen> {
                         child: Column(
                           children: [
                             const Text(
-                              'SMARTWASTE',
+                              'MUNICIPIO CUSCO',
                               style: TextStyle(color: primaryColor, fontSize: 24, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 20),
                             const Text(
-                              'Transformando la recolección de residuos en Cusco a través de la optimización de rutas y la participación ciudadana.',
+                              'Servicio de Gestión de Residuos del Distrito de Cusco. Trabajando por una ciudad limpia y sostenible.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.white70, height: 1.6),
                             ),
@@ -204,7 +308,7 @@ class _LandingScreenState extends State<LandingScreen> {
                             const Divider(color: Colors.white10),
                             const SizedBox(height: 20),
                             const Text(
-                              '© 2026 SmartWaste Cusco.',
+                              '© 2026 Municipalidad del Cusco.',
                               style: TextStyle(color: Colors.white38, fontSize: 12),
                             ),
                           ],
@@ -274,7 +378,7 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  Widget _buildLoginForm(Color primaryColor, Color secondaryColor) {
+  Widget _buildAuthForm(Color primaryColor, Color secondaryColor) {
     return Card(
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -284,65 +388,43 @@ class _LandingScreenState extends State<LandingScreen> {
         child: AutofillGroup(
           child: Column(
             children: [
-              Icon(Icons.delete_outline, color: primaryColor, size: 40),
+              Icon(_isRegistering ? Icons.person_add_outlined : Icons.delete_outline, color: primaryColor, size: 40),
               const SizedBox(height: 10),
               Text(
-                'Acceso al Sistema',
+                _isRegistering ? 'Registro Ciudadano' : 'Acceso al Sistema',
                 style: TextStyle(
                   color: secondaryColor,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const Text(
-                'Inicie sesión para gestionar la recolección',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+              Text(
+                _isRegistering ? 'Crea tu cuenta para reportar' : 'Inicie sesión para gestionar la recolección',
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 25),
 
-              // Email Input
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Correo Electrónico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 5),
-                  TextField(
-                    controller: _emailController,
-                    autofillHints: const [AutofillHints.email],
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      hintText: 'admin@smartwaste.com',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
+              if (_isRegistering) ...[
+                _buildInputField('Nombres', _nombreController, 'Juan'),
+                const SizedBox(height: 10),
+                _buildInputField('Apellidos', _apellidoController, 'Perez'),
+                const SizedBox(height: 10),
+                _buildInputField('DNI', _dniController, '12345678', keyboardType: TextInputType.number),
+                const SizedBox(height: 10),
+              ],
 
-              // Password Input
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Contraseña', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 5),
-                  TextField(
-                    controller: _passwordController,
-                    autofillHints: const [AutofillHints.password],
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      hintText: '••••••••',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
+              _buildInputField('Correo Electrónico', _emailController, 'ejemplo@cusco.gob.pe', 
+                keyboardType: TextInputType.emailAddress, autofill: AutofillHints.email),
+              const SizedBox(height: 10),
+              
+              _buildInputField('Contraseña', _passwordController, '••••••••', 
+                obscureText: true, autofill: AutofillHints.password),
+              
               const SizedBox(height: 25),
 
               // Submit Button
               ElevatedButton(
-                onPressed: _isLoading ? null : _login,
+                onPressed: _isLoading ? null : (_isRegistering ? _register : _login),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
@@ -351,17 +433,43 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
                 child: _isLoading 
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('ENTRAR', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(_isRegistering ? 'CREAR CUENTA' : 'ENTRAR', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
+              
               const SizedBox(height: 20),
-              const Text(
-                '¿Olvidó su contraseña?',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+              
+              GestureDetector(
+                onTap: () => setState(() => _isRegistering = !_isRegistering),
+                child: Text(
+                  _isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate',
+                  style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInputField(String label, TextEditingController controller, String hint, {bool obscureText = false, TextInputType? keyboardType, String? autofill}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 5),
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          autofillHints: autofill != null ? [autofill] : null,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+        ),
+      ],
     );
   }
 
@@ -374,4 +482,3 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 }
-

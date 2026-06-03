@@ -137,12 +137,20 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
     setState(() => _isLoading = true);
 
     try {
+      String fotoUrl = 'https://via.placeholder.com/300';
+      if (_imageFile != null) {
+        final uploadedUrl = await ApiService.uploadImage(_imageFile!);
+        if (uploadedUrl != null) {
+          fotoUrl = uploadedUrl;
+        }
+      }
+
       final reportData = {
         'usuario_id': _usuario!['id'],
         'descripcion': _descripcionController.text.trim(),
         'latitud': _currentPosition!.latitude,
         'longitud': _currentPosition!.longitude,
-        'foto_url': 'https://via.placeholder.com/300', 
+        'foto_url': fotoUrl, 
         'tipo_residuo_id': 1,
       };
 
@@ -213,7 +221,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Dashboard Ciudadano'),
+        title: const Text('Municipio Cusco - Ciudadano'),
         backgroundColor: secondaryColor,
         foregroundColor: Colors.white,
         actions: [
@@ -314,22 +322,83 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
               itemCount: _misReportes.length,
               itemBuilder: (context, index) {
                 final report = _misReportes[index];
+                final String estado = report['estado'] ?? 'registrado';
+                final String? comentario = report['comentario_admin'];
+
+                Color statusColor = Colors.orange;
+                String statusText = 'RECIBIDO';
+                
+                if (estado == 'en_proceso') {
+                  statusColor = Colors.blue;
+                  statusText = 'EN PROCESO';
+                } else if (estado == 'atendido') {
+                  statusColor = Colors.green;
+                  statusText = 'ATENDIDO';
+                }
+
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: ListTile(
-                    leading: const Icon(Icons.description, color: primaryColor),
-                    title: Text('Ticket: ${report['numero_ticket']}'),
-                    subtitle: Text(report['descripcion'] ?? 'Sin descripción'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Enviado', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                          onPressed: () => _deleteReport(report['id']),
+                  margin: const EdgeInsets.only(bottom: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 2,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.description, color: primaryColor),
                         ),
-                      ],
-                    ),
+                        title: Text('Ticket: ${report['numero_ticket']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(report['descripcion'] ?? 'Sin descripción', maxLines: 2, overflow: TextOverflow.ellipsis),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                          child: Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                        ),
+                      ),
+                      if (comentario != null && comentario.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.green.withOpacity(0.2)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.message, size: 14, color: Colors.green),
+                                  SizedBox(width: 5),
+                                  Text('Respuesta del Supervisor:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green)),
+                                ],
+                              ),
+                              const SizedBox(height: 5),
+                              Text(comentario, style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.black87)),
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10, bottom: 5, left: 15),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              report['fecha_creacion'].toString().split('T')[0],
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              onPressed: () => _deleteReport(report['id']),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

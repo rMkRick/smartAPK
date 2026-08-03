@@ -1,11 +1,16 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/api_service.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../controllers/citizen_controller.dart';
 import 'landing_screen.dart';
+
+// Mismo centro y tiles OSM que usa el mapa de la web (MapaPicker.jsx), para
+// que la ubicación se vea y se elija de forma consistente en ambas apps.
+const LatLng kCuscoCenter = LatLng(-13.5319, -71.9675);
+// Sin subdominios {s}: la política actual de OSM desaconseja repartir la
+// carga entre a/b/c.tile — un solo dominio es lo recomendado hoy.
+const String kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 class CitizenDashboard extends StatefulWidget {
   const CitizenDashboard({super.key});
@@ -15,84 +20,45 @@ class CitizenDashboard extends StatefulWidget {
 }
 
 class _CitizenDashboardState extends State<CitizenDashboard> {
-  Map<String, dynamic>? _usuario;
-  List<dynamic> _misReportes = [];
-  bool _isLoading = false;
-  bool _isLocationLoading = true;
-  
+  final _controller = CitizenController();
   final _descripcionController = TextEditingController();
-  File? _imageFile;
-  Position? _currentPosition;
+  final MapController _mapController = MapController();
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onControllerChanged);
     _loadUser();
-    _startLocationTracking();
+    _controller.startLocationTracking();
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    _descripcionController.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (!mounted) return;
+    setState(() {});
+
+    // Centra el mapa en el GPS mientras el usuario no haya fijado un punto a mano.
+    final pos = _controller.currentPosition;
+    if (pos != null && _controller.pickedPosition == null) {
+      try {
+        _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
+      } catch (_) {
+        // el mapa puede no estar montado todavía; se centrará al construirse
+      }
+    }
   }
 
   Future<void> _loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userStr = prefs.getString('usuario');
-    if (userStr != null) {
-      setState(() {
-        _usuario = jsonDecode(userStr);
-      });
-      _fetchReports();
-    } else {
-      _logout();
-    }
-  }
-
-  void _startLocationTracking() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) setState(() => _isLocationLoading = false);
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (mounted) setState(() => _isLocationLoading = false);
-        return;
-      }
-    }
-
-    Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
-    ).listen((Position position) {
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-          _isLocationLoading = false;
-        });
-      }
-    });
-  }
-
-  Future<void> _fetchReports() async {
-    if (_usuario == null) return;
-    final reports = await ApiService.getUserReports(_usuario!['id']);
-    if (mounted) {
-      setState(() {
-        _misReportes = reports;
-      });
-    }
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path);
-      });
-    }
+    final ok = await _controller.loadUser();
+    if (!ok) _logout();
   }
 
   void _showImageSourceActionSheet() {
@@ -106,7 +72,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
               title: const Text('Tomar Foto (Cámara)'),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.camera);
+                _controller.pickImage(ImageSource.camera);
               },
             ),
             ListTile(
@@ -114,7 +80,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
               title: const Text('Cargar Foto (Galería)'),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
+                _controller.pickImage(ImageSource.gallery);
               },
             ),
           ],
@@ -124,54 +90,11 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
   }
 
   Future<void> _submitReport() async {
-    if (_imageFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, tome o cargue una foto')));
-      return;
-    }
-
-    if (_currentPosition == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esperando ubicación GPS...')));
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      String fotoUrl = 'https://via.placeholder.com/300';
-      if (_imageFile != null) {
-        final uploadedUrl = await ApiService.uploadImage(_imageFile!);
-        if (uploadedUrl != null) {
-          fotoUrl = uploadedUrl;
-        }
-      }
-
-      final reportData = {
-        'usuario_id': _usuario!['id'],
-        'descripcion': _descripcionController.text.trim(),
-        'latitud': _currentPosition!.latitude,
-        'longitud': _currentPosition!.longitude,
-        'foto_url': fotoUrl, 
-        'tipo_residuo_id': 1,
-      };
-
-      final response = await ApiService.createReport(reportData);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reporte enviado. Ticket: ${response['numero_ticket']}')),
-        );
-        _descripcionController.clear();
-        setState(() {
-          _imageFile = null;
-        });
-        _fetchReports();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al enviar reporte')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    final outcome = await _controller.submitReport(_descripcionController.text);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(outcome.message)));
+    if (outcome.success) {
+      _descripcionController.clear();
     }
   }
 
@@ -192,19 +115,15 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
     );
 
     if (confirm == true) {
-      final response = await ApiService.deleteReport(id);
+      final mensaje = await _controller.deleteReport(id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['mensaje'] ?? 'Reporte eliminado')),
-        );
-        _fetchReports();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
       }
     }
   }
 
   void _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _controller.logout();
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -218,10 +137,17 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
     const primaryColor = Color(0xFFF97316);
     const secondaryColor = Color(0xFF0F172A);
 
+    final usuario = _controller.usuario;
+    final misReportes = _controller.misReportes;
+    final isLoading = _controller.isLoading;
+    final isLocationLoading = _controller.isLocationLoading;
+    final ubicacionEfectiva = _controller.ubicacionEfectiva;
+    final currentPosition = _controller.currentPosition;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Municipio Cusco - Ciudadano'),
+        title: const Text('SmartAPk - Ciudadano'),
         backgroundColor: secondaryColor,
         foregroundColor: Colors.white,
         actions: [
@@ -234,7 +160,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Hola, ${_usuario?['nombres'] ?? 'Usuario'}!',
+              'Hola, ${usuario?.nombres ?? 'Usuario'}!',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: secondaryColor),
             ),
             const SizedBox(height: 20),
@@ -256,34 +182,81 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
                       ),
                     ),
                     const SizedBox(height: 15),
-                    
-                    // Ubicación en tiempo real
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blueGrey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.location_on, color: Colors.redAccent, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _isLocationLoading 
-                              ? const Text('Buscando GPS...', style: TextStyle(fontSize: 12))
-                              : Text(
-                                  _currentPosition != null 
-                                    ? 'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, Lon: ${_currentPosition!.longitude.toStringAsFixed(6)}'
-                                    : 'GPS no disponible',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+
+                    // Ubicación del incidente: mismo mapa OSM que en la web
+                    // (toca el mapa para fijarla a mano, o usa el botón de GPS).
+                    const Text('Ubicación del Incidente', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Toca el mapa para fijar la ubicación o usa tu GPS.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        height: 220,
+                        decoration: BoxDecoration(border: Border.all(color: const Color(0xFFCBD5E1))),
+                        child: isLocationLoading && _controller.pickedPosition == null
+                            ? const Center(child: CircularProgressIndicator())
+                            : FlutterMap(
+                                mapController: _mapController,
+                                options: MapOptions(
+                                  initialCenter: ubicacionEfectiva ?? kCuscoCenter,
+                                  initialZoom: 15,
+                                  onTap: (tapPosition, point) => _controller.selectPickedPosition(point),
                                 ),
-                          ),
-                          if (_currentPosition != null)
-                            const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                        ],
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: kOsmTileUrl,
+                                    userAgentPackageName: 'com.smartwaste.smartapk',
+                                  ),
+                                  if (ubicacionEfectiva != null)
+                                    MarkerLayer(markers: [
+                                      Marker(
+                                        point: ubicacionEfectiva,
+                                        width: 40,
+                                        height: 40,
+                                        child: const Icon(Icons.location_pin, color: Colors.redAccent, size: 40),
+                                      ),
+                                    ]),
+                                ],
+                              ),
                       ),
                     ),
-                    
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, size: 14, color: ubicacionEfectiva != null ? Colors.green : Colors.grey),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isLocationLoading && ubicacionEfectiva == null
+                                ? 'Buscando GPS...'
+                                : ubicacionEfectiva != null
+                                    ? 'Ubicación: ${ubicacionEfectiva.latitude.toStringAsFixed(6)}, ${ubicacionEfectiva.longitude.toStringAsFixed(6)}'
+                                    : 'GPS no disponible, toca el mapa para elegir',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: currentPosition == null
+                          ? null
+                          : () {
+                              _controller.clearPickedPosition();
+                              try {
+                                _mapController.move(
+                                  LatLng(currentPosition.latitude, currentPosition.longitude), 15);
+                              } catch (_) {}
+                            },
+                      icon: const Icon(Icons.gps_fixed, size: 16),
+                      label: const Text('Usar mi ubicación GPS'),
+                      style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF0EA5E9)),
+                    ),
+
                     const SizedBox(height: 15),
                     Row(
                       children: [
@@ -294,20 +267,20 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[200], foregroundColor: secondaryColor),
                         ),
                         const SizedBox(width: 10),
-                        if (_imageFile != null)
+                        if (_controller.imageFile != null)
                           const Icon(Icons.check_circle, color: Colors.green),
                       ],
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      onPressed: _isLoading ? null : _submitReport,
+                      onPressed: isLoading ? null : _submitReport,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('ENVIAR REPORTE'),
+                      child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('ENVIAR REPORTE'),
                     ),
                   ],
                 ),
@@ -319,15 +292,15 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _misReportes.length,
+              itemCount: misReportes.length,
               itemBuilder: (context, index) {
-                final report = _misReportes[index];
-                final String estado = report['estado'] ?? 'registrado';
-                final String? comentario = report['comentario_admin'];
+                final report = misReportes[index];
+                final String estado = report.estado ?? 'registrado';
+                final String? comentario = report.comentarioAdmin;
 
                 Color statusColor = Colors.orange;
                 String statusText = 'RECIBIDO';
-                
+
                 if (estado == 'en_proceso') {
                   statusColor = Colors.blue;
                   statusText = 'EN PROCESO';
@@ -348,8 +321,8 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
                           decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                           child: const Icon(Icons.description, color: primaryColor),
                         ),
-                        title: Text('Ticket: ${report['numero_ticket']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(report['descripcion'] ?? 'Sin descripción', maxLines: 2, overflow: TextOverflow.ellipsis),
+                        title: Text('Ticket: ${report.numeroTicket}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(report.descripcion ?? 'Sin descripción', maxLines: 2, overflow: TextOverflow.ellipsis),
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
@@ -387,13 +360,13 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Text(
-                              report['fecha_creacion'].toString().split('T')[0],
+                              (report.fechaCreacion ?? '').split('T')[0],
                               style: const TextStyle(fontSize: 11, color: Colors.grey),
                             ),
                             const Spacer(),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                              onPressed: () => _deleteReport(report['id']),
+                              onPressed: () => _deleteReport(report.id),
                             ),
                           ],
                         ),

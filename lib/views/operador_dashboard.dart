@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../controllers/operador_controller.dart';
 import 'landing_screen.dart';
-import 'dart:convert';
 
 class OperadorDashboard extends StatefulWidget {
   const OperadorDashboard({super.key});
@@ -11,25 +10,28 @@ class OperadorDashboard extends StatefulWidget {
 }
 
 class _OperadorDashboardState extends State<OperadorDashboard> {
-  Map<String, dynamic>? _usuario;
+  final _controller = OperadorController();
 
   @override
   void initState() {
     super.initState();
-    _loadUser();
+    _controller.addListener(_onChanged);
+    _controller.loadUser();
   }
 
-  Future<void> _loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userStr = prefs.getString('usuario');
-    if (userStr != null) {
-      setState(() => _usuario = jsonDecode(userStr));
-    }
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onChanged);
+    _controller.dispose();
+    super.dispose();
   }
 
   void _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _controller.logout();
     if (mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LandingScreen()));
     }
@@ -42,7 +44,7 @@ class _OperadorDashboardState extends State<OperadorDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Municipio Cusco - Recolector'),
+        title: const Text('SmartAPk - Recolector'),
         backgroundColor: secondaryColor,
         foregroundColor: Colors.white,
         actions: [IconButton(onPressed: _logout, icon: const Icon(Icons.logout))],
@@ -52,7 +54,7 @@ class _OperadorDashboardState extends State<OperadorDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Bienvenido, Operador ${_usuario?['nombres'] ?? ''}', 
+            Text('Bienvenido, Operador ${_controller.usuario?.nombres ?? ''}',
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             const Card(

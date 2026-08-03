@@ -1,30 +1,17 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+// Smoke test: verifica que la app arranca y muestra la pantalla de
+// aterrizaje (login/registro), que es el punto de entrada real de SmartAPk.
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:miprimeraapp/main.dart';
+import 'package:smart_apk/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('SmartAPk arranca mostrando LandingScreen', (WidgetTester tester) async {
+    await tester.pumpWidget(const SmartAPkApp());
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('MUNI CUSCO'), findsOneWidget);
+    expect(find.text('SmartAPk'), findsWidgets);
+    expect(find.text('Acceso al Sistema'), findsOneWidget);
+    expect(find.text('ENTRAR'), findsOneWidget);
   });
 }

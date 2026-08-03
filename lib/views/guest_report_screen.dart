@@ -1,8 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:geolocator/geolocator.dart';
-import '../services/api_service.dart';
+import '../controllers/guest_report_controller.dart';
 
 class GuestReportScreen extends StatefulWidget {
   const GuestReportScreen({super.key});
@@ -12,85 +9,47 @@ class GuestReportScreen extends StatefulWidget {
 }
 
 class _GuestReportScreenState extends State<GuestReportScreen> {
+  final _controller = GuestReportController();
   final _descripcionController = TextEditingController();
-  File? _imageFile;
-  Position? _currentPosition;
-  bool _isLoading = false;
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.camera);
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path);
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onChanged);
   }
 
-  Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-
-    if (permission == LocationPermission.deniedForever) return;
-
-    final position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentPosition = position;
-    });
+  @override
+  void dispose() {
+    _controller.removeListener(_onChanged);
+    _controller.dispose();
+    _descripcionController.dispose();
+    super.dispose();
   }
 
   Future<void> _submitReport() async {
-    setState(() => _isLoading = true);
-    await _getCurrentLocation();
+    final outcome = await _controller.submitReport(_descripcionController.text);
+    if (!mounted) return;
 
-    if (_currentPosition == null) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo obtener la ubicación')));
-      return;
-    }
-
-    try {
-      final reportData = {
-        'usuario_id': null,
-        'descripcion': _descripcionController.text.trim(),
-        'latitud': _currentPosition!.latitude,
-        'longitud': _currentPosition!.longitude,
-        'foto_url': 'https://via.placeholder.com/300',
-        'tipo_residuo_id': 1,
-      };
-
-      final response = await ApiService.createReport(reportData);
-      
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Reporte Enviado'),
-            content: Text('Su reporte ha sido registrado con éxito. Ticket: ${response['numero_ticket']}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al enviar reporte')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    if (outcome.success) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reporte Enviado'),
+          content: Text('Su reporte ha sido registrado con éxito. Ticket: ${outcome.message}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(outcome.message)));
     }
   }
 
@@ -140,7 +99,7 @@ class _GuestReportScreenState extends State<GuestReportScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: _pickImage,
+                          onPressed: _controller.pickImage,
                           icon: const Icon(Icons.camera_alt),
                           label: const Text('Evidencia (Foto)'),
                           style: ElevatedButton.styleFrom(
@@ -148,7 +107,7 @@ class _GuestReportScreenState extends State<GuestReportScreen> {
                             foregroundColor: secondaryColor,
                           ),
                         ),
-                        if (_imageFile != null)
+                        if (_controller.imageFile != null)
                           const Padding(
                             padding: EdgeInsets.only(left: 10),
                             child: Icon(Icons.check_circle, color: Colors.green),
@@ -157,7 +116,7 @@ class _GuestReportScreenState extends State<GuestReportScreen> {
                     ),
                     const SizedBox(height: 30),
                     ElevatedButton(
-                      onPressed: _isLoading ? null : _submitReport,
+                      onPressed: _controller.isLoading ? null : _submitReport,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
@@ -166,8 +125,8 @@ class _GuestReportScreenState extends State<GuestReportScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: _isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white) 
+                      child: _controller.isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
                         : const Text('ENVIAR REPORTE AHORA', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],

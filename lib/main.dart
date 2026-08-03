@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'screens/landing_screen.dart';
+import 'views/landing_screen.dart';
 
 void main() {
-  runApp(const SmartWasteApp());
+  runApp(const SmartAPkApp());
 }
 
-class SmartWasteApp extends StatelessWidget {
-  const SmartWasteApp({super.key});
+class SmartAPkApp extends StatelessWidget {
+  const SmartAPkApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SmartWaste Cusco',
+      title: 'SmartAPk',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -26,3 +26,4 @@ class SmartWasteApp extends StatelessWidget {
     );
   }
 }
+

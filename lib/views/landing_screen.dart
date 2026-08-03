@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
+import '../controllers/auth_controller.dart';
 import 'citizen_dashboard.dart';
 import 'operador_dashboard.dart';
 import 'admin_dashboard.dart';
+import 'supervisor_dashboard.dart';
 import 'guest_report_screen.dart';
-import '../services/api_service.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -15,155 +14,78 @@ class LandingScreen extends StatefulWidget {
 }
 
 class _LandingScreenState extends State<LandingScreen> {
+  final _authController = AuthController();
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nombreController = TextEditingController();
   final _apellidoController = TextEditingController();
   final _dniController = TextEditingController();
-  
-  bool _isLoading = false;
-  bool _isRegistering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authController.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _authController.removeListener(_onAuthChanged);
+    _authController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nombreController.dispose();
+    _apellidoController.dispose();
+    _dniController.dispose();
+    super.dispose();
+  }
 
   Future<void> _login() async {
-    setState(() => _isLoading = true);
-    try {
-      final response = await ApiService.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
+    final outcome = await _authController.login(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+    if (!mounted) return;
 
-      if (response['token'] != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', response['token']);
-        await prefs.setString('usuario', jsonEncode(response['usuario']));
+    if (outcome.success) {
+      final rolId = _authController.usuario?.rol;
+      Widget nextScreen;
 
-        if (mounted) {
-          final rolId = response['usuario']['rol_id'];
-          Widget nextScreen;
-          
-          if (rolId == 1) {
-            nextScreen = const CitizenDashboard();
-          } else if (rolId == 2) {
-            nextScreen = const OperadorDashboard();
-          } else if (rolId == 3 || rolId == 4) {
-            nextScreen = const AdminDashboard();
-          } else {
-            nextScreen = const CitizenDashboard();
-          }
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => nextScreen),
-          );
-        }
+      if (rolId == 1) {
+        nextScreen = const CitizenDashboard();
+      } else if (rolId == 2) {
+        nextScreen = const OperadorDashboard();
+      } else if (rolId == 3) {
+        nextScreen = const AdminDashboard();
+      } else if (rolId == 4) {
+        nextScreen = const SupervisorDashboard();
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['mensaje'] ?? 'Error al iniciar sesión')),
-          );
-        }
+        nextScreen = const CitizenDashboard();
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión con el servidor')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => nextScreen),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(outcome.message)));
     }
   }
 
   Future<void> _register() async {
-    final nombres = _nombreController.text.trim();
-    final apellidos = _apellidoController.text.trim();
-    final dni = _dniController.text.trim();
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (nombres.isEmpty || apellidos.isEmpty || dni.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor completa todos los campos')),
-      );
-      return;
-    }
-
-    // Validar Nombres (> 3 letras)
-    if (nombres.length <= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Los nombres deben tener más de 3 letras')),
-      );
-      return;
-    }
-
-    // Validar Apellidos (> 3 letras)
-    if (apellidos.length <= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Los apellidos deben tener más de 3 letras')),
-      );
-      return;
-    }
-
-    // Validar DNI (8 dígitos)
-    if (dni.length != 8 || !RegExp(r'^\d{8}$').hasMatch(dni)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El DNI debe tener exactamente 8 dígitos')),
-      );
-      return;
-    }
-
-    // Validar Correo
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingrese un correo electrónico válido')),
-      );
-      return;
-    }
-
-    // Validar Contraseña (al menos una mayúscula)
-    if (!password.contains(RegExp(r'[A-Z]'))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La contraseña debe tener al menos una letra mayúscula')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final userData = {
-        'nombres': nombres,
-        'apellidos': apellidos,
-        'dni': dni,
-        'correo': email,
-        'contrasena': password,
-        'rol_id': 1, // Ciudadano por defecto
-        'zona_id': 1, // Centro Histórico por defecto
-      };
-
-      final response = await ApiService.register(userData);
-
-      if (mounted) {
-        if (response['mensaje'] != null && response['mensaje'].toString().toLowerCase().contains('éxito')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registro exitoso. Ahora puedes iniciar sesión.')),
-          );
-          setState(() => _isRegistering = false);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['mensaje'] ?? 'Error al registrarse')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al conectar con el servidor')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    final outcome = await _authController.register(
+      nombres: _nombreController.text.trim(),
+      apellidos: _apellidoController.text.trim(),
+      dni: _dniController.text.trim(),
+      correo: _emailController.text.trim(),
+      contrasena: _passwordController.text.trim(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(outcome.message)));
   }
 
   @override
@@ -180,11 +102,12 @@ class _LandingScreenState extends State<LandingScreen> {
           Container(
             width: double.infinity,
             height: double.infinity,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: secondaryColor,
               image: DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1526392060635-9d6019884377?q=80&w=2000&auto=format&fit=crop'),
+                image: const NetworkImage('https://images.unsplash.com/photo-1526392060635-9d6019884377?q=80&w=2000&auto=format&fit=crop'),
                 fit: BoxFit.cover,
+                onError: (exception, stackTrace) {},
               ),
             ),
             child: Container(
@@ -224,11 +147,7 @@ class _LandingScreenState extends State<LandingScreen> {
                               ],
                             ),
                             ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _isRegistering = !_isRegistering;
-                                });
-                              },
+                              onPressed: _authController.toggleRegistering,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryColor,
                                 foregroundColor: Colors.white,
@@ -236,7 +155,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
                               child: Text(
-                                _isRegistering ? 'VOLVER AL LOGIN' : 'REGISTRO', 
+                                _authController.isRegistering ? 'VOLVER AL LOGIN' : 'REGISTRO',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)
                               ),
                             ),
@@ -247,7 +166,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       // Responsive Layout for Hero and Login
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 50 : 20),
-                        child: isLargeScreen 
+                        child: isLargeScreen
                           ? Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -295,12 +214,12 @@ class _LandingScreenState extends State<LandingScreen> {
                         child: Column(
                           children: [
                             const Text(
-                              'MUNICIPIO CUSCO',
+                              'SmartAPk',
                               style: TextStyle(color: primaryColor, fontSize: 24, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 20),
                             const Text(
-                              'Servicio de Gestión de Residuos del Distrito de Cusco. Trabajando por una ciudad limpia y sostenible.',
+                              'Servicio de Gestión de Residuos. Trabajando por una ciudad limpia y sostenible.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.white70, height: 1.6),
                             ),
@@ -308,7 +227,7 @@ class _LandingScreenState extends State<LandingScreen> {
                             const Divider(color: Colors.white10),
                             const SizedBox(height: 20),
                             const Text(
-                              '© 2026 Municipalidad del Cusco.',
+                              '© 2026 SmartAPk.',
                               style: TextStyle(color: Colors.white38, fontSize: 12),
                             ),
                           ],
@@ -330,7 +249,7 @@ class _LandingScreenState extends State<LandingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Software de Recolección de Residuos',
+          'SmartAPk',
           style: TextStyle(
             color: Colors.white,
             fontSize: isLargeScreen ? 32 : 24,
@@ -339,7 +258,7 @@ class _LandingScreenState extends State<LandingScreen> {
           ),
         ),
         Text(
-          'Impulsando un Cusco Limpio',
+          'Impulsando una ciudad Limpia',
           style: TextStyle(
             color: primaryColor,
             fontSize: isLargeScreen ? 28 : 20,
@@ -348,7 +267,7 @@ class _LandingScreenState extends State<LandingScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Optimice sus rutas de recolección, reduzca emisiones en la ciudad imperial y mejore la calidad de vida de todos los cusqueños.',
+          'Optimice sus rutas de recolección, reduzca emisiones y mejore la calidad de vida de todos.',
           style: TextStyle(
             color: Colors.white70,
             fontSize: isLargeScreen ? 15 : 13,
@@ -379,6 +298,9 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildAuthForm(Color primaryColor, Color secondaryColor) {
+    final isRegistering = _authController.isRegistering;
+    final isLoading = _authController.isLoading;
+
     return Card(
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -388,10 +310,10 @@ class _LandingScreenState extends State<LandingScreen> {
         child: AutofillGroup(
           child: Column(
             children: [
-              Icon(_isRegistering ? Icons.person_add_outlined : Icons.delete_outline, color: primaryColor, size: 40),
+              Icon(isRegistering ? Icons.person_add_outlined : Icons.delete_outline, color: primaryColor, size: 40),
               const SizedBox(height: 10),
               Text(
-                _isRegistering ? 'Registro Ciudadano' : 'Acceso al Sistema',
+                isRegistering ? 'Registro Ciudadano' : 'Acceso al Sistema',
                 style: TextStyle(
                   color: secondaryColor,
                   fontSize: 22,
@@ -399,12 +321,12 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
               Text(
-                _isRegistering ? 'Crea tu cuenta para reportar' : 'Inicie sesión para gestionar la recolección',
+                isRegistering ? 'Crea tu cuenta para reportar' : 'Inicie sesión para gestionar la recolección',
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 25),
 
-              if (_isRegistering) ...[
+              if (isRegistering) ...[
                 _buildInputField('Nombres', _nombreController, 'Juan'),
                 const SizedBox(height: 10),
                 _buildInputField('Apellidos', _apellidoController, 'Perez'),
@@ -413,35 +335,37 @@ class _LandingScreenState extends State<LandingScreen> {
                 const SizedBox(height: 10),
               ],
 
-              _buildInputField('Correo Electrónico', _emailController, 'ejemplo@cusco.gob.pe', 
+              _buildInputField('Correo Electrónico', _emailController, 'ejemplo@smartapk.com',
                 keyboardType: TextInputType.emailAddress, autofill: AutofillHints.email),
               const SizedBox(height: 10),
-              
-              _buildInputField('Contraseña', _passwordController, '••••••••', 
+
+              _buildInputField('Contraseña', _passwordController, '••••••••',
                 obscureText: true, autofill: AutofillHints.password),
-              
+
               const SizedBox(height: 25),
 
               // Submit Button
               ElevatedButton(
-                onPressed: _isLoading ? null : (_isRegistering ? _register : _login),
+                onPressed: isLoading ? null : (isRegistering ? _register : _login),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
-                child: _isLoading 
+                child: isLoading
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(_isRegistering ? 'CREAR CUENTA' : 'ENTRAR', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(isRegistering ? 'CREAR CUENTA' : 'ENTRAR', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
-              
+
               const SizedBox(height: 20),
-              
+
               GestureDetector(
-                onTap: () => setState(() => _isRegistering = !_isRegistering),
+                onTap: _authController.toggleRegistering,
                 child: Text(
-                  _isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate',
+                  isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate',
                   style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),

@@ -1,6 +1,6 @@
 {
-    "name": "miprimeraapp",
-    "short_name": "miprimeraapp",
+    "name": "SmartAPk",
+    "short_name": "SmartAPk",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

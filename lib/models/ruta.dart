@@ -1,3 +1,4 @@
+import 'package:latlong2/latlong.dart';
 import 'json_utils.dart';
 
 class Ruta {
@@ -46,4 +47,19 @@ class Ruta {
         operadorApellidos: json['operador_apellidos'] as String?,
         waypoints: json['waypoints'] is List ? json['waypoints'] as List<dynamic> : null,
       );
+
+  /// Puntos GPS de la ruta (en orden), listos para dibujar en el mapa.
+  /// Ignora entradas sin 'lat'/'lng' válidos en vez de fallar.
+  List<LatLng> get puntosRuta {
+    if (waypoints == null) return [];
+    return waypoints!
+        .whereType<Map>()
+        .map((w) {
+          final lat = (w['lat'] as num?)?.toDouble();
+          final lng = (w['lng'] as num?)?.toDouble();
+          return (lat != null && lng != null) ? LatLng(lat, lng) : null;
+        })
+        .whereType<LatLng>()
+        .toList();
+  }
 }

@@ -4,13 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../controllers/citizen_controller.dart';
 import 'landing_screen.dart';
-
-// Mismo centro y tiles OSM que usa el mapa de la web (MapaPicker.jsx), para
-// que la ubicación se vea y se elija de forma consistente en ambas apps.
-const LatLng kCuscoCenter = LatLng(-13.5319, -71.9675);
-// Sin subdominios {s}: la política actual de OSM desaconseja repartir la
-// carga entre a/b/c.tile — un solo dominio es lo recomendado hoy.
-const String kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+import 'map_constants.dart';
 
 class CitizenDashboard extends StatefulWidget {
   const CitizenDashboard({super.key});

@@ -36,4 +36,39 @@ void main() {
       expect(ruta.waypoints, isNull);
     });
   });
+
+  group('Ruta.puntosRuta', () {
+    test('convierte los waypoints {lat, lng} a LatLng en orden', () {
+      final ruta = Ruta.fromJson({
+        'id': 5,
+        'waypoints': [
+          {'lat': -13.5, 'lng': -71.9},
+          {'lat': -13.51, 'lng': -71.91},
+        ],
+      });
+
+      final puntos = ruta.puntosRuta;
+      expect(puntos, hasLength(2));
+      expect(puntos.first.latitude, -13.5);
+      expect(puntos.last.longitude, -71.91);
+    });
+
+    test('devuelve lista vacía si no hay waypoints', () {
+      final ruta = Ruta.fromJson({'id': 1});
+      expect(ruta.puntosRuta, isEmpty);
+    });
+
+    test('ignora entradas sin lat/lng válidos', () {
+      final ruta = Ruta.fromJson({
+        'id': 1,
+        'waypoints': [
+          {'lat': -13.5, 'lng': -71.9},
+          {'lat': null, 'lng': -71.91},
+          'no es un mapa',
+        ],
+      });
+
+      expect(ruta.puntosRuta, hasLength(1));
+    });
+  });
 }

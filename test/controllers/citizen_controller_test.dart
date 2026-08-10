@@ -134,7 +134,7 @@ void main() {
 
     test('fetchReports puebla misReportes desde el JSON del backend', () async {
       ApiService.client = MockClient((request) async {
-        expect(request.url.path, contains('/reports/usuario/42'));
+        expect(request.url.path, contains('/reportes/usuario/42'));
         return http.Response(
           jsonEncode([
             {'id': 1, 'numero_ticket': 'TCK-1', 'estado': 'enviado'},
@@ -192,11 +192,11 @@ void main() {
       var createCalled = false;
       ApiService.client = MockClient((request) async {
         final path = request.url.path;
-        if (path.endsWith('/reports/upload')) {
+        if (path.endsWith('/reportes/upload')) {
           uploadCalled = true;
           return http.Response(jsonEncode({'foto_url': 'https://cdn/evidencia.jpg'}), 200);
         }
-        if (request.method == 'POST' && path.endsWith('/reports')) {
+        if (request.method == 'POST' && path.endsWith('/reportes')) {
           createCalled = true;
           return http.Response(jsonEncode({'numero_ticket': 'TCK-99'}), 200);
         }

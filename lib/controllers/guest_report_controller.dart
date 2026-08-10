@@ -55,7 +55,11 @@ class GuestReportController extends ChangeNotifier {
         'tipo_residuo_id': 1,
       };
       final response = await ApiService.createReport(reportData);
-      return Outcome(true, response['numero_ticket']?.toString() ?? '');
+      final ticket = response['numero_ticket'];
+      if (ticket == null) {
+        return Outcome(false, response['mensaje']?.toString() ?? 'No se pudo enviar el reporte');
+      }
+      return Outcome(true, ticket.toString());
     } catch (e) {
       return const Outcome(false, 'Error al enviar reporte');
     } finally {

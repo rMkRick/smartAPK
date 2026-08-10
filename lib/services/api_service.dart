@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
@@ -10,16 +9,10 @@ class ApiService {
   // para simular respuestas del backend sin red real.
   static http.Client client = http.Client();
 
-  // Configuración dinámica de la URL según la plataforma
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5000/api';
-    } else if (Platform.isAndroid || Platform.isWindows || Platform.isIOS) {
-      return 'http://10.202.66.103:5000/api'; // IP local de tu PC
-    } else {
-      return 'http://10.202.66.103:5000/api';
-    }
-  }
+  // Backend centralizado (Node/Express + MySQL) desplegado en Vercel: todos
+  // los dispositivos comparten los mismos datos, a diferencia de la base
+  // SQLite local que usaba cada instalación por separado.
+  static const String baseUrl = 'https://smartwaste-nine.vercel.app/api';
 
   static Future<Map<String, dynamic>> login(String correo, String contrasena) async {
     try {
@@ -31,12 +24,39 @@ class ApiService {
           'contrasena': contrasena,
         }),
       ).timeout(const Duration(seconds: 10));
-      
-      print('API Response Status: ${response.statusCode}');
       return jsonDecode(response.body);
     } catch (e) {
-      print('Error en login: $e');
       return {'mensaje': 'No se pudo conectar con el servidor. ¿Está el backend encendido?'};
+    }
+  }
+
+  // Login con Google/Facebook: el SDK nativo ya autenticó al usuario en el
+  // dispositivo, aquí solo se registra/recupera su cuenta en el backend con
+  // el perfil obtenido (mismo contrato que usa smartwaste/frontend).
+  static Future<Map<String, dynamic>> loginSocial({
+    required String nombres,
+    required String apellidos,
+    required String correo,
+    String? fotoPerfil,
+    required String proveedorSocial,
+    required String proveedorId,
+  }) async {
+    try {
+      final response = await client.post(
+        Uri.parse('$baseUrl/auth/login-social'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'nombres': nombres,
+          'apellidos': apellidos,
+          'correo': correo,
+          'foto_perfil': fotoPerfil,
+          'proveedor_social': proveedorSocial,
+          'proveedor_id': proveedorId,
+        }),
+      ).timeout(const Duration(seconds: 10));
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'mensaje': 'No se pudo conectar con el servidor.'};
     }
   }
 
@@ -46,28 +66,45 @@ class ApiService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(userData),
     ).timeout(const Duration(seconds: 10));
-    return jsonDecode(response.body);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    // Este backend devuelve validaciones fallidas como {'errores': [...]}
+    // en vez de {'mensaje': ...}; se normaliza para que el resto de la app
+    // (que solo lee 'mensaje') siga funcionando.
+    if (decoded['mensaje'] == null && decoded['errores'] is List) {
+      final errores = (decoded['errores'] as List).join('. ');
+      return {...decoded, 'mensaje': errores};
+    }
+    return decoded;
   }
 
   static Future<Map<String, dynamic>> createReport(Map<String, dynamic> reportData) async {
     try {
       final response = await client.post(
-        Uri.parse('$baseUrl/reports'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$baseUrl/reportes'),
+        headers: await _authHeaders(),
         body: jsonEncode(reportData),
       ).timeout(const Duration(seconds: 10));
-      return jsonDecode(response.body);
+      if (response.body.startsWith('<!DOCTYPE html>')) {
+        return {'mensaje': 'Error 404: el backend no tiene la ruta /reportes.'};
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic> && decoded['numero_ticket'] == null && decoded['mensaje'] == null) {
+        return {...decoded, 'mensaje': 'No se pudo registrar el reporte.'};
+      }
+      return decoded;
     } catch (e) {
-      print('Error en createReport: $e');
       return {'mensaje': 'Error al enviar reporte (Tiempo agotado)'};
     }
   }
 
   static Future<String?> uploadImage(File imageFile) async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/reports/upload'));
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/reportes/upload'));
+      final headers = await _authHeaders();
+      headers.remove('Content-Type');
+      request.headers.addAll(headers);
       request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
-      
+
       var response = await client.send(request);
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
@@ -75,19 +112,23 @@ class ApiService {
         return decoded['foto_url'];
       }
     } catch (e) {
-      print('Error uploading image: $e');
+      // Sin conexión o backend caído: se ignora, el llamador usa un
+      // placeholder si uploadImage devuelve null.
     }
     return null;
   }
 
   static Future<List<dynamic>> getUserReports(int userId) async {
     try {
-      final response = await client.get(Uri.parse('$baseUrl/reports/usuario/$userId'));
+      final response = await client.get(
+        Uri.parse('$baseUrl/reportes/usuario/$userId'),
+        headers: await _authHeaders(),
+      );
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (e) {
-      print('Error en getUserReports: $e');
+      // Sin conexión: se devuelve lista vacía más abajo.
     }
     return [];
   }
@@ -95,19 +136,16 @@ class ApiService {
   static Future<Map<String, dynamic>> deleteReport(int reportId) async {
     try {
       final response = await client.delete(
-        Uri.parse('$baseUrl/reports/${reportId.toString()}'),
-        headers: {'Accept': 'application/json'},
+        Uri.parse('$baseUrl/reportes/${reportId.toString()}'),
+        headers: await _authHeaders(),
       ).timeout(const Duration(seconds: 10));
-      
-      print('Delete Response Status: ${response.statusCode}');
-      
+
       if (response.body.startsWith('<!DOCTYPE html>')) {
-        return {'mensaje': 'Error 404: El servidor no encontró la ruta de borrado. REINICIA EL BACKEND.'};
+        return {'mensaje': 'Error 404: el backend no tiene la ruta para borrar reportes.'};
       }
-      
+
       return jsonDecode(response.body);
     } catch (e) {
-      print('Error en deleteReport: $e');
       return {'mensaje': 'Error al conectar para borrar. Revisa que el servidor esté prendido.'};
     }
   }

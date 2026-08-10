@@ -1,0 +1,9 @@
+<resources>
+    <!-- Mismo Facebook App ID que usa el frontend web (smartwaste/frontend). -->
+    <string name="facebook_app_id">3486125941550675</string>
+    <string name="fb_login_protocol_scheme">fb3486125941550675</string>
+    <!-- TODO: pegar aquí el Client Token real (Facebook for Developers →
+         tu app → Configuración → Avanzada → Token de cliente). Sin esto
+         el login de Facebook falla en Android. -->
+    <string name="facebook_client_token">PENDIENTE_CLIENT_TOKEN</string>
+</resources>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/outcome.dart';
 import 'citizen_dashboard.dart';
 import 'operador_dashboard.dart';
 import 'admin_dashboard.dart';
@@ -50,7 +51,22 @@ class _LandingScreenState extends State<LandingScreen> {
       _passwordController.text.trim(),
     );
     if (!mounted) return;
+    _procesarResultadoLogin(outcome);
+  }
 
+  Future<void> _loginConGoogle() async {
+    final outcome = await _authController.loginConGoogle();
+    if (!mounted) return;
+    _procesarResultadoLogin(outcome);
+  }
+
+  Future<void> _loginConFacebook() async {
+    final outcome = await _authController.loginConFacebook();
+    if (!mounted) return;
+    _procesarResultadoLogin(outcome);
+  }
+
+  void _procesarResultadoLogin(Outcome outcome) {
     if (outcome.success) {
       final rolId = _authController.usuario?.rol;
       Widget nextScreen;
@@ -360,6 +376,47 @@ class _LandingScreenState extends State<LandingScreen> {
                   : Text(isRegistering ? 'CREAR CUENTA' : 'ENTRAR', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
 
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('o continúa con', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: isLoading ? null : _loginConGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 22, color: Color(0xFFDB4437)),
+                      label: const Text('Google', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: secondaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: isLoading ? null : _loginConFacebook,
+                      icon: const Icon(Icons.facebook, size: 18, color: Color(0xFF1877F2)),
+                      label: const Text('Facebook', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: secondaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
 
               GestureDetector(

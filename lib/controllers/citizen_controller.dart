@@ -116,9 +116,13 @@ class CitizenController extends ChangeNotifier {
       };
 
       final response = await ApiService.createReport(reportData);
+      final ticket = response['numero_ticket'];
+      if (ticket == null) {
+        return Outcome(false, response['mensaje']?.toString() ?? 'No se pudo enviar el reporte');
+      }
       imageFile = null;
       await fetchReports();
-      return Outcome(true, 'Reporte enviado. Ticket: ${response['numero_ticket']}');
+      return Outcome(true, 'Reporte enviado. Ticket: $ticket');
     } catch (e) {
       return const Outcome(false, 'Error al enviar reporte');
     } finally {

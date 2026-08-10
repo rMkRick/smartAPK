@@ -4,14 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_apk/controllers/guest_report_controller.dart';
 import 'package:smart_apk/services/api_service.dart';
 
 import '../support/fake_platform_interfaces.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('GuestReportController arranca sin foto, sin ubicación y sin cargar', () {
     final controller = GuestReportController();
 
@@ -67,7 +71,7 @@ void main() {
     test('éxito: envía el reporte y devuelve el número de ticket', () async {
       GeolocatorPlatform.instance = FakeGeolocatorPlatform();
       ApiService.client = MockClient((request) async {
-        expect(request.url.path, endsWith('/reports'));
+        expect(request.url.path, endsWith('/reportes'));
         return http.Response(jsonEncode({'numero_ticket': 'TCK-77'}), 200);
       });
       final controller = GuestReportController();

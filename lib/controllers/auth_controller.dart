@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/usuario.dart';
 import '../services/api_service.dart';
@@ -33,6 +35,79 @@ class AuthController extends ChangeNotifier {
       return Outcome(false, response['mensaje'] ?? 'Error al iniciar sesión');
     } catch (e) {
       return const Outcome(false, 'Error de conexión con el servidor');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Outcome> _procesarLoginSocial(Map<String, dynamic> response) async {
+    if (response['token'] != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', response['token']);
+      await prefs.setString('usuario', jsonEncode(response['usuario']));
+      usuario = Usuario.fromJson(response['usuario']);
+      return const Outcome(true, '');
+    }
+    return Outcome(false, response['mensaje'] ?? 'Error al iniciar sesión');
+  }
+
+  Future<Outcome> loginConGoogle() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final cuenta = await GoogleSignIn().signIn();
+      if (cuenta == null) {
+        return const Outcome(false, 'Inicio de sesión con Google cancelado');
+      }
+      final partes = cuenta.displayName?.trim().split(RegExp(r'\s+')) ?? [];
+      final nombres = partes.isNotEmpty ? partes.first : cuenta.email;
+      final apellidos = partes.length > 1 ? partes.sublist(1).join(' ') : '';
+
+      final response = await ApiService.loginSocial(
+        nombres: nombres,
+        apellidos: apellidos,
+        correo: cuenta.email,
+        fotoPerfil: cuenta.photoUrl,
+        proveedorSocial: 'google',
+        proveedorId: cuenta.id,
+      );
+      return await _procesarLoginSocial(response);
+    } catch (e) {
+      return const Outcome(false, 'Error al iniciar sesión con Google');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Outcome> loginConFacebook() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final resultado = await FacebookAuth.instance.login(permissions: const ['email', 'public_profile']);
+      if (resultado.status != LoginStatus.success) {
+        return const Outcome(false, 'Inicio de sesión con Facebook cancelado');
+      }
+      final perfil = await FacebookAuth.instance.getUserData(
+        fields: 'id,first_name,last_name,email,picture.type(large)',
+      );
+      final correo = perfil['email'] as String?;
+      if (correo == null) {
+        return const Outcome(false, 'Facebook no compartió un correo. Usa otro método de inicio de sesión.');
+      }
+
+      final response = await ApiService.loginSocial(
+        nombres: (perfil['first_name'] as String?) ?? '',
+        apellidos: (perfil['last_name'] as String?) ?? '',
+        correo: correo,
+        fotoPerfil: perfil['picture']?['data']?['url'] as String?,
+        proveedorSocial: 'facebook',
+        proveedorId: perfil['id'] as String,
+      );
+      return await _procesarLoginSocial(response);
+    } catch (e) {
+      return const Outcome(false, 'Error al iniciar sesión con Facebook');
     } finally {
       isLoading = false;
       notifyListeners();

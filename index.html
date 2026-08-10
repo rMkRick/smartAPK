@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SmartAPk — Descargar APK</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗑️</text></svg>" />
+<style>
+  :root {
+    --bg: #FBF7F2;
+    --card: #FFFFFF;
+    --ink: #1B1712;
+    --ink-soft: #6B5F52;
+    --line: #E9E0D4;
+    --accent: #F97316;
+    --accent-dark: #C2410C;
+    --accent-wash: #FFF1E6;
+    --navy: #0F172A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  canvas#routes {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 560px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(27, 23, 18, 0.04), 0 20px 48px -24px rgba(27, 23, 18, 0.18);
+    padding: 40px 40px 32px;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-dark);
+    margin: 0 0 18px;
+  }
+
+  .eyebrow .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-wash);
+  }
+
+  h1 {
+    font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", "URW Palladio L", Georgia, serif;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    text-wrap: balance;
+    color: var(--navy);
+  }
+
+  .subtitle {
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 46ch;
+    margin: 0 0 28px;
+  }
+
+  .download {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 15px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 24px -10px rgba(249, 115, 22, 0.55);
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+
+  .download:hover { background: var(--accent-dark); transform: translateY(-1px); }
+  .download:active { transform: translateY(0); }
+  .download:focus-visible { outline: 3px solid var(--navy); outline-offset: 3px; }
+
+  .download svg { flex: none; }
+
+  .meta {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 12px;
+  }
+
+  .meta span:not(:last-child)::after {
+    content: "·";
+    margin-left: 14px;
+    color: var(--line);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 32px 0 24px;
+  }
+
+  h2 {
+    font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", "URW Palladio L", Georgia, serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    margin: 0 0 14px;
+  }
+
+  .steps {
+    margin: 0 0 28px;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .steps li::before {
+    content: counter(step);
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-wash);
+    color: var(--accent-dark);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  caption {
+    text-align: left;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+
+  td:first-child, th:first-child { padding-left: 0; }
+  td:last-child, th:last-child { padding-right: 0; }
+
+  .role {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--accent-wash);
+    color: var(--accent-dark);
+    padding: 2px 6px;
+    border-radius: 5px;
+  }
+
+  footer {
+    margin-top: 26px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+
+  footer a { color: var(--ink-soft); }
+
+  @media (max-width: 460px) {
+    .card { padding: 30px 24px 26px; }
+    h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="routes" aria-hidden="true"></canvas>
+
+<main class="card">
+  <p class="eyebrow"><span class="dot"></span>SmartAPk · gestión de residuos</p>
+  <h1>Recolección de residuos, en tu bolsillo</h1>
+  <p class="subtitle">
+    App para reportar incidencias de residuos, ver rutas de recolección y gestionar
+    camiones y conductores. Conectada a un backend centralizado: los datos se
+    comparten entre todos los dispositivos que la instalen.
+  </p>
+
+  <a class="download" href="https://github.com/rMkRick/smartAPK/releases/download/v1.0.0-apk/app-release.apk" download="SmartAPk.apk">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"></path>
+      <path d="m7 10 5 5 5-5"></path>
+      <path d="M5 21h14"></path>
+    </svg>
+    Descargar APK
+  </a>
+  <p class="meta">
+    <span>v1.0.0</span>
+    <span>57&nbsp;MB</span>
+    <span>Android</span>
+  </p>
+
+  <hr />
+
+  <h2>Cómo instalar</h2>
+  <ol class="steps">
+    <li>Descarga el archivo <code>SmartAPk.apk</code> desde tu celular Android.</li>
+    <li>Ábrelo desde Descargas. Si Android pide permiso para instalar de "orígenes desconocidos", actívalo para tu navegador.</li>
+    <li>Toca Instalar y espera a que termine. Ya puedes abrir SmartAPk.</li>
+  </ol>
+
+  <h2>Cuentas de prueba</h2>
+  <table>
+    <caption>Cada una entra directo al panel de su rol.</caption>
+    <thead>
+      <tr><th>Rol</th><th>Correo</th><th>Contraseña</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="role">Ciudadano</span></td><td><code>ciudadano@smartwaste.com</code></td><td><code>123456</code></td></tr>
+      <tr><td><span class="role">Operador</span></td><td><code>pedro@gmail.com</code></td><td><code>123456</code></td></tr>
+      <tr><td><span class="role">Admin</span></td><td><code>admin@smartwaste.com</code></td><td><code>123456</code></td></tr>
+      <tr><td><span class="role">Supervisor</span></td><td><code>supervisor@smartwaste.com</code></td><td><code>123456</code></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Publicado en <a href="https://github.com/rMkRick/smartAPK">github.com/rMkRick/smartAPK</a>
+  </footer>
+</main>
+
+<script>
+  (function () {
+    var canvas = document.getElementById('routes');
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function resize() {
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Rutas: unas cuantas polilíneas suaves tipo "ruta de recolección" de fondo,
+    // con un punto que recorre cada una — referencia quieta al tema de la app.
+    function makeRoute(seed) {
+      var w = window.innerWidth, h = window.innerHeight;
+      var points = [];
+      var n = 5 + (seed % 3);
+      var startX = (seed * 137) % w;
+      var startY = (seed * 91) % h;
+      var x = startX, y = startY;
+      for (var i = 0; i < n; i++) {
+        x += (Math.sin(seed + i * 1.7) * 160) + 120;
+        y += (Math.cos(seed * 0.7 + i * 1.3) * 140) + 40;
+        points.push({ x: x % (w + 200) - 100, y: y % (h + 200) - 100 });
+      }
+      return points;
+    }
+
+    var routes = [makeRoute(2), makeRoute(5), makeRoute(9)];
+    var t = 0;
+
+    function draw() {
+      var w = window.innerWidth, h = window.innerHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      routes.forEach(function (pts, ri) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var i = 1; i < pts.length - 2; i++) {
+          var xc = (pts[i].x + pts[i + 1].x) / 2;
+          var yc = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+        }
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.10)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 7]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // punto viajero
+        var total = pts.length - 1;
+        var progress = ((t * 0.00025) + ri * 0.33) % 1;
+        var seg = Math.floor(progress * total);
+        var segT = (progress * total) - seg;
+        var a = pts[Math.min(seg, total)];
+        var b = pts[Math.min(seg + 1, total)];
+        var px = a.x + (b.x - a.x) * segT;
+        var py = a.y + (b.y - a.y) * segT;
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.35)';
+        ctx.fill();
+      });
+    }
+
+    if (reduceMotion) {
+      draw();
+    } else {
+      (function loop() {
+        t += 16;
+        draw();
+        requestAnimationFrame(loop);
+      })();
+    }
+  })();
+</script>
+</body>
+</html>
